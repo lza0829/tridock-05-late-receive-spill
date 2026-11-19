@@ -1,0 +1,15 @@
+# Python
+backend/.venv/
+__pycache__/
+*.pyc
+
+# Node
+frontend/node_modules/
+frontend/dist/
+frontend/.npm-cache/
+
+# 运行数据（sqlite 与 WAL）
+data/
+
+# 系统
+.DS_Store

@@ -4,12 +4,20 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from app.db import connect
 from app.services.gate import assert_writable
+from app.services.alias_service import normalize_on_load
 
 router = APIRouter(tags=["lines"])
 
 
 def _now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _normalize(conn, supplier_code: str, sku: str) -> dict:
+    """装载规范化：与对账物化共用 alias_service 同一套映射口径。"""
+    raw = (sku or "").strip()
+    info = normalize_on_load(conn, supplier_code, raw)
+    return {"raw_sku": raw, "sku": info["sku"], "alias_status": info["status"]}
 
 
 class ExpectIn(BaseModel):
@@ -69,13 +77,15 @@ def add_expect(body: ExpectIn):
     conn = connect()
     try:
         assert_writable(conn, body.dock_day)
+        norm = _normalize(conn, body.supplier_code, body.sku)
         conn.execute(
-            '''INSERT INTO expect_lines(doc_no, supplier_code, sku, dock_day, qty, note, created_at)
-               VALUES (?,?,?,?,?,?,?)''',
-            (body.doc_no, body.supplier_code, body.sku, body.dock_day, body.qty, body.note, _now()),
+            '''INSERT INTO expect_lines(doc_no, supplier_code, sku, raw_sku, dock_day, qty, note, created_at)
+               VALUES (?,?,?,?,?,?,?,?)''',
+            (body.doc_no, body.supplier_code, norm["sku"], norm["raw_sku"],
+             body.dock_day, body.qty, body.note, _now()),
         )
         conn.commit()
-        return {"ok": True}
+        return {"ok": True, **norm}
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
     except Exception as e:
@@ -105,13 +115,15 @@ def add_receive(body: ReceiveIn):
     try:
         assert_writable(conn, body.dock_day)
         occurred = body.occurred_at or _now()
+        norm = _normalize(conn, body.supplier_code, body.sku)
         conn.execute(
-            '''INSERT INTO receive_lines(receive_no, supplier_code, sku, dock_day, qty, occurred_at, note, created_at)
-               VALUES (?,?,?,?,?,?,?,?)''',
+            '''INSERT INTO receive_lines(receive_no, supplier_code, sku, raw_sku, dock_day, qty, occurred_at, note, created_at)
+               VALUES (?,?,?,?,?,?,?,?,?)''',
             (
                 body.receive_no,
                 body.supplier_code,
-                body.sku,
+                norm["sku"],
+                norm["raw_sku"],
                 body.dock_day,
                 body.qty,
                 occurred,
@@ -120,7 +132,7 @@ def add_receive(body: ReceiveIn):
             ),
         )
         conn.commit()
-        return {"ok": True}
+        return {"ok": True, **norm}
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
     except Exception as e:
@@ -149,13 +161,15 @@ def add_confirm(body: ConfirmIn):
     conn = connect()
     try:
         assert_writable(conn, body.dock_day)
+        norm = _normalize(conn, body.supplier_code, body.sku)
         conn.execute(
-            '''INSERT INTO confirm_lines(confirm_no, supplier_code, sku, dock_day, qty, note, created_at)
-               VALUES (?,?,?,?,?,?,?)''',
-            (body.confirm_no, body.supplier_code, body.sku, body.dock_day, body.qty, body.note, _now()),
+            '''INSERT INTO confirm_lines(confirm_no, supplier_code, sku, raw_sku, dock_day, qty, note, created_at)
+               VALUES (?,?,?,?,?,?,?,?)''',
+            (body.confirm_no, body.supplier_code, norm["sku"], norm["raw_sku"],
+             body.dock_day, body.qty, body.note, _now()),
         )
         conn.commit()
-        return {"ok": True}
+        return {"ok": True, **norm}
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
     except Exception as e:

@@ -5,7 +5,7 @@
       <div class="row">
         <input v-model="form.receive_no" placeholder="实收号" />
         <input v-model="form.supplier_code" placeholder="供应商编码" />
-        <input v-model="form.sku" placeholder="货号" />
+        <input v-model="form.sku" placeholder="货号（外部码）" />
         <input v-model="form.dock_day" placeholder="到货日" />
         <input v-model.number="form.qty" type="number" placeholder="数量" />
         <button @click="add">登记实收</button>
@@ -13,9 +13,13 @@
       <p class="msg">{{ err }}</p>
       <p class="okmsg">{{ ok }}</p>
       <table>
-        <thead><tr><th>实收号</th><th>供应商</th><th>货号</th><th>到货日</th><th>数量</th></tr></thead>
+        <thead><tr><th>实收号</th><th>供应商</th><th>原始码</th><th>归并货号</th><th>到货日</th><th>数量</th></tr></thead>
         <tbody>
-          <tr v-for="r in rows" :key="r.id"><td>{{ r.receive_no }}</td><td>{{ r.supplier_code }}</td><td>{{ r.sku }}</td><td>{{ r.dock_day }}</td><td>{{ r.qty }}</td></tr>
+          <tr v-for="r in rows" :key="r.id">
+            <td>{{ r.receive_no }}</td><td>{{ r.supplier_code }}</td>
+            <td>{{ r.raw_sku || r.sku }}</td><td>{{ r.sku }}</td>
+            <td>{{ r.dock_day }}</td><td>{{ r.qty }}</td>
+          </tr>
         </tbody>
       </table>
     </div>
@@ -32,8 +36,9 @@ async function load() { rows.value = await api('/receives') }
 async function add() {
   err.value = ''; ok.value = ''
   try {
-    await api('/receives', { method: 'POST', body: JSON.stringify(form.value) })
-    ok.value = '已登记'
+    const r = await api('/receives', { method: 'POST', body: JSON.stringify(form.value) })
+    const st = { alias_hit: '别名命中', identity: '内部码直通', miss: '缺映射→将进 alias_miss', strict_raw: '严格码不映射' }[r.alias_status] || r.alias_status
+    ok.value = `已登记（${st}：${r.raw_sku} → ${r.sku}）`
     await load()
   } catch (e) { err.value = e.message }
 }

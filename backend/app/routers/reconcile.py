@@ -87,6 +87,26 @@ def variances(batch_id: int | None = None, dock_day: str | None = None):
         conn.close()
 
 
+@router.get("/reconcile/alias-miss")
+def alias_miss(batch_id: int | None = None, dock_day: str | None = None):
+    """缺映射桶：merge 架构下映射失败的外部码只在这里可查，绝不进 matched。"""
+    conn = connect()
+    try:
+        if batch_id is not None:
+            rows = conn.execute(
+                "SELECT * FROM alias_miss WHERE batch_id=? ORDER BY id", (batch_id,)
+            ).fetchall()
+        elif dock_day:
+            rows = conn.execute(
+                "SELECT * FROM alias_miss WHERE dock_day=? ORDER BY id", (dock_day,)
+            ).fetchall()
+        else:
+            rows = conn.execute("SELECT * FROM alias_miss ORDER BY id DESC").fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
 @router.post("/reconcile/variances/{variance_id}/fate")
 def set_fate(variance_id: int, body: FateIn):
     conn = connect()
